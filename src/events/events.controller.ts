@@ -27,4 +27,9 @@ export class EventsController {
   remove(@Param('id') id: string) {
     return this.eventsService.remove(id);
   }
+
+  @Post('users/:userId/merge-all')
+  mergeAll(@Param('userId') userId: string) {
+    return this.eventsService.mergeAll(userId);
+  }
 }

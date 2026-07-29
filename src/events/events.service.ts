@@ -1,7 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
-import { Event } from './entities/event.entity';
+import { Event, EventStatus } from './entities/event.entity';
 import { User } from '../users/entities/user.entity';
 import { CreateEventDto } from './dto/create-event.dto';
 
@@ -51,5 +51,90 @@ export class EventsService {
     if (result.affected === 0) {
       throw new NotFoundException(`Event ${id} not found`);
     }
+  }
+
+  async mergeAll(userId: string): Promise<Event[]> {
+    // Check for user
+    const user = await this.userRepo.findOne({ where: { id: userId } });
+    if (!user) {
+      throw new NotFoundException(`User ${userId} not found`);
+    }
+
+    // Fetch this user's events, sorted chronologically
+    const matchingEvents  = await this.eventRepo.find({
+      where: { invitees: { id: userId } },
+      order: { startTime: 'ASC' },
+    });
+    const eventIds = matchingEvents.map((e) => e.id);
+
+    if (eventIds.length === 0) {
+      return [];
+    }
+
+    // Re-fetch events by ID for full invitees list
+    const events = await this.eventRepo.find({
+      where: { id: In(eventIds) },
+      relations: { invitees: true },
+      order: { startTime: 'ASC' },
+    });
+
+    const merged: Event[] = [];
+    let current: Event | null = null;
+
+    for (const evt of events) {
+      if (!current) {
+        current = evt;
+        continue;
+      }
+
+      // Overlap check:
+      // does the new event start before (or exactly when) the current event ends?
+      if (evt.startTime <= current.endTime) {
+        current = this.mergeTwo(current, evt);
+      } else {
+        // No overlap: the interval is finalized, start a new one.
+        merged.push(current);
+        current = evt;
+      }
+    }
+    if (current) {
+      merged.push(current);
+    }
+
+    // only touch DB if changes were made
+    if (merged.length === events.length) {
+      return events;
+    }
+
+    await this.eventRepo.remove(events);
+    return this.eventRepo.save(merged);
+  }
+
+  private mergeTwo(a: Event, b: Event): Event {
+    const combinedInviteeIds = [...a.invitees, ...b.invitees].filter(
+        (user, idx, arr) => arr.findIndex((u) => u.id === user.id) === idx,
+    );
+
+    return this.eventRepo.create({
+      title: `${a.title}` + " | " + `${b.title}`,
+      description: [a.description, b.description].filter(Boolean).join(' | '), // adjusts for optional description field
+      status: this.pickStatus(a.status, b.status),
+      startTime: a.startTime < b.startTime ? a.startTime : b.startTime,
+      endTime: a.endTime > b.endTime ? a.endTime : b.endTime,
+      invitees: combinedInviteeIds,
+    });
+  }
+
+  private pickStatus(a: EventStatus, b: EventStatus): EventStatus {
+    // if ONE of events is IN_PROGRESS, then IN_PROGRESS
+    // else if BOTH events COMPLETED, then COMPLETED
+    // else TODO
+    if (a === EventStatus.IN_PROGRESS || b === EventStatus.IN_PROGRESS) {
+      return EventStatus.IN_PROGRESS;
+    }
+    if (a === EventStatus.COMPLETED && b === EventStatus.COMPLETED) {
+      return EventStatus.COMPLETED;
+    }
+    return EventStatus.TODO;
   }
 }
