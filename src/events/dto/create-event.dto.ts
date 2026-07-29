@@ -19,7 +19,8 @@ export class CreateEventDto {
   description?: string;
 
   @IsEnum(EventStatus)
-  status!: EventStatus;
+  @IsOptional()
+  status?: EventStatus;
 
   @IsDateString()
   startTime!: string;
