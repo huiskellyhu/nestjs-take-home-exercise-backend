@@ -18,30 +18,30 @@ export enum EventStatus {
 @Entity()
 export class Event {
   @PrimaryGeneratedColumn('uuid')
-    id!: string;
+  id!: string;
 
   @Column()
-    title!: string;
+  title!: string;
 
   @Column({ nullable: true })
   description?: string;
 
   @Column({ type: 'enum', enum: EventStatus, default: EventStatus.TODO })
-    status!: EventStatus;
+  status!: EventStatus;
 
   @CreateDateColumn()
-    createdAt!: Date;
+  createdAt!: Date;
 
   @UpdateDateColumn()
-    updatedAt!: Date;
+  updatedAt!: Date;
 
   @Column()
-    startTime!: Date;
+  startTime!: Date;
 
   @Column()
-    endTime!: Date;
+  endTime!: Date;
 
   @ManyToMany(() => User, (user) => user.events)
-    @JoinTable()
-    invitees!: User[];
+  @JoinTable()
+  invitees!: User[];
 }
