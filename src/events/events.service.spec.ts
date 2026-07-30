@@ -141,7 +141,7 @@ describe('EventsService', () => {
       expect(eventRepo.save).not.toHaveBeenCalled();
     })
 
-    it('handles merging when one event has no description', async () => {
+    it('handles merging when one event has no description, reversed start times', async () => {
       userRepo.findOne.mockResolvedValue(alice);
 
       const eventA = {
@@ -149,8 +149,8 @@ describe('EventsService', () => {
         title: 'Standup',
         description: undefined,
         status: EventStatus.TODO,
-        startTime: new Date('2026-07-28T14:00:00.000Z'),
-        endTime: new Date('2026-07-28T15:00:00.000Z'),
+        startTime: new Date('2026-07-28T14:45:00.000Z'),
+        endTime: new Date('2026-07-28T16:00:00.000Z'),
         invitees: [alice],
       } as Event;
 
@@ -159,8 +159,8 @@ describe('EventsService', () => {
         title: 'Design Review',
         description: 'later lunch',
         status: EventStatus.TODO,
-        startTime: new Date('2026-07-28T14:45:00.000Z'),
-        endTime: new Date('2026-07-28T16:00:00.000Z'),
+        startTime: new Date('2026-07-28T14:00:00.000Z'),
+        endTime: new Date('2026-07-28T15:00:00.000Z'),
         invitees: [alice],
       } as Event;
 
@@ -173,6 +173,10 @@ describe('EventsService', () => {
 
       // no stray " | " prefix when one side is missing
       expect(result[0].description).toBe('later lunch');
+
+      // checks when EventB has the earlier start time instead of EventA
+      expect(result[0].startTime).toEqual(new Date('2026-07-28T14:00:00.000Z'));
+      expect(result[0].endTime).toEqual(new Date('2026-07-28T16:00:00.000Z'));
     });
 
     it('throws NotFoundException for an unknown user', async () => {
