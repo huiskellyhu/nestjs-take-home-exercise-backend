@@ -62,7 +62,7 @@ Order of Operations:
 1. Start server
 2. Create 3 events (overlap between Hangout 1 and Hangout 2)
 3. Get Breaktime event by id
-4. View user Kelly to display all 3 events
+4. View user Kelly to display all 3 events (Users were created beforehand)
 5. MergeAll on user Kelly
 6. Delete Breaktime event (verified by viewing user Kelly)
 7. Run tests
