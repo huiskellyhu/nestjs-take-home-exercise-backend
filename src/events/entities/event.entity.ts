@@ -26,7 +26,7 @@ export class Event {
   @Column({ nullable: true })
   description?: string;
 
-  @Column({ type: 'enum', enum: EventStatus, default: EventStatus.TODO })
+  @Column({ type: 'simple-enum', enum: EventStatus, default: EventStatus.TODO })
   status!: EventStatus;
 
   @CreateDateColumn()
