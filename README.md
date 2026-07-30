@@ -54,3 +54,17 @@ $ npm run test:e2e
 # test coverage
 $ npm run test:cov
 ```
+
+## Video Demo
+https://github.com/user-attachments/assets/6d39d1a2-883b-4afe-9538-06d2b61a915f
+
+Order of Operations:
+1. Start server
+2. Create 3 events (overlap between Hangout 1 and Hangout 2)
+3. Get Breaktime event by id
+4. View user Kelly to display all 3 events
+5. MergeAll on user Kelly
+6. Delete Breaktime event (verified by viewing user Kelly)
+7. Run tests
+
+
