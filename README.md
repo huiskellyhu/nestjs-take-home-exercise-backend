@@ -2,6 +2,8 @@
 
 A take-home exercise to add a feature to the NestJS starter repository.
 
+Closed PR to merge in this branch, but please view the PR!
+
 ## Project setup
 
 ### 1. Install dependencies
@@ -67,4 +69,8 @@ Order of Operations:
 6. Delete Breaktime event (verified by viewing user Kelly)
 7. Run tests
 
-
+## Project Takeaways
+- Opened eyes to consider DB quirks when working with new technology stack (query results differ when filtering)
+- Vulnerabilities for tradeoff of simple-enum vs enum in Postgres
+- Nice practice for psql and accessing DB through terminal
+- Insightful to NestJS and best practices (as someone new to NestJS)
