@@ -68,9 +68,9 @@ describe('EventsService', () => {
 
       const eventA = {
         id: 'e1',
-        title: 'Standup',
-        description: undefined,
-        status: EventStatus.TODO,
+        title: 'Hangout 1',
+        description: 'lunch',
+        status: EventStatus.COMPLETED,
         startTime: new Date('2026-07-28T14:00:00.000Z'),
         endTime: new Date('2026-07-28T15:00:00.000Z'),
         invitees: [alice],
@@ -78,8 +78,8 @@ describe('EventsService', () => {
 
       const eventB = {
         id: 'e2',
-        title: 'Design Review',
-        description: undefined,
+        title: 'Hangout 2',
+        description: 'later lunch',
         status: EventStatus.TODO,
         startTime: new Date('2026-07-28T14:45:00.000Z'),
         endTime: new Date('2026-07-28T16:00:00.000Z'),
@@ -94,6 +94,8 @@ describe('EventsService', () => {
       const result = await service.mergeAll('alice');
 
       expect(result).toHaveLength(1);
+      expect(result[0].title).toBe('Hangout 1 | Hangout 2');
+      expect(result[0].description).toBe('lunch | later lunch');
       expect(result[0].startTime).toEqual(new Date('2026-07-28T14:00:00.000Z'));
       expect(result[0].endTime).toEqual(new Date('2026-07-28T16:00:00.000Z'));
       expect(result[0].invitees).toHaveLength(2);
@@ -129,12 +131,172 @@ describe('EventsService', () => {
       expect(eventRepo.save).not.toHaveBeenCalled();
     });
 
+    it('leaves everything untouched if user has no events', async () => {
+      userRepo.findOne.mockResolvedValue(alice);
+      eventRepo.find.mockResolvedValue([]);
+
+      const result = await service.mergeAll('alice');
+      expect(result).toEqual([]);
+      expect(eventRepo.remove).not.toHaveBeenCalled();
+      expect(eventRepo.save).not.toHaveBeenCalled();
+    })
+
+    it('handles merging when one event has no description', async () => {
+      userRepo.findOne.mockResolvedValue(alice);
+
+      const eventA = {
+        id: 'e1',
+        title: 'Standup',
+        description: undefined,
+        status: EventStatus.TODO,
+        startTime: new Date('2026-07-28T14:00:00.000Z'),
+        endTime: new Date('2026-07-28T15:00:00.000Z'),
+        invitees: [alice],
+      } as Event;
+
+      const eventB = {
+        id: 'e2',
+        title: 'Design Review',
+        description: 'later lunch',
+        status: EventStatus.TODO,
+        startTime: new Date('2026-07-28T14:45:00.000Z'),
+        endTime: new Date('2026-07-28T16:00:00.000Z'),
+        invitees: [alice],
+      } as Event;
+
+      eventRepo.find
+        .mockResolvedValueOnce([eventA, eventB])
+        .mockResolvedValueOnce([eventA, eventB]);
+      eventRepo.save.mockImplementation((events) => Promise.resolve(events));
+
+      const result = await service.mergeAll('alice');
+
+      // no stray " | " prefix when one side is missing
+      expect(result[0].description).toBe('later lunch');
+    });
+
     it('throws NotFoundException for an unknown user', async () => {
       userRepo.findOne.mockResolvedValue(null);
 
       await expect(service.mergeAll('ghost')).rejects.toThrow(
         NotFoundException,
       );
+    });
+  });
+
+  describe('create', () => {
+    it('creates an event with looked-up invitees', async () => {
+      const alice = { id: 'alice', name: 'Alice' } as User;
+      userRepo.find.mockResolvedValue([alice]);
+      eventRepo.save.mockImplementation((event) => Promise.resolve(event));
+
+      const dto = {
+        title: 'Break Time',
+        startTime: '2026-07-28T14:00:00.000Z',
+        endTime: '2026-07-28T15:00:00.000Z',
+        inviteeIds: ['alice'],
+      };
+
+      const result = await service.create(dto as any);
+
+      // confirms we actually queried for the right invitee IDs
+      expect(userRepo.find).toHaveBeenCalledWith({
+        where: { id: expect.anything() },
+      });
+      expect(result.invitees).toEqual([alice]);
+      // confirms the DTO's string dates got converted to real Date objects
+      expect(result.startTime).toBeInstanceOf(Date);
+    });
+
+    it('defaults invitees to an empty array when none are provided', async () => {
+      eventRepo.save.mockImplementation((event) => Promise.resolve(event));
+
+      const dto = {
+        title: 'EmptyEvent',
+        startTime: '2026-07-28T18:00:00.000Z',
+        endTime: '2026-07-28T19:00:00.000Z',
+      };
+
+      const result = await service.create(dto as any);
+
+      // no inviteeIds means we should never even hit the User repo
+      expect(userRepo.find).not.toHaveBeenCalled();
+      expect(result.invitees).toEqual([]);
+    });
+  });
+
+  describe('remove', () => {
+    it('deletes the event when it exists', async () => {
+      eventRepo.delete.mockResolvedValue({ affected: 1, raw: {} });
+
+      await expect(service.remove('e1')).resolves.toBeUndefined();
+      expect(eventRepo.delete).toHaveBeenCalledWith('e1');
+    });
+
+    it('throws NotFoundException when nothing was deleted', async () => {
+      eventRepo.delete.mockResolvedValue({ affected: 0, raw: {} });
+
+      await expect(service.remove('missing-id')).rejects.toThrow(
+        NotFoundException,
+      );
+    });
+  });
+
+  describe('mergeAll status precedence', () => {
+    const alice = { id: 'alice', name: 'Alice' } as User;
+
+    const makeOverlappingPair = (statusA: EventStatus, statusB: EventStatus) => {
+      const eventA = {
+        id: 'e1',
+        title: 'A',
+        description: undefined,
+        status: statusA,
+        startTime: new Date('2026-07-28T14:00:00.000Z'),
+        endTime: new Date('2026-07-28T15:00:00.000Z'),
+        invitees: [alice],
+      } as Event;
+
+      const eventB = {
+        id: 'e2',
+        title: 'B',
+        description: undefined,
+        status: statusB,
+        startTime: new Date('2026-07-28T14:45:00.000Z'),
+        endTime: new Date('2026-07-28T16:00:00.000Z'),
+        invitees: [alice],
+      } as Event;
+
+      return [eventA, eventB];
+    };
+
+    it('picks IN_PROGRESS if either event is IN_PROGRESS', async () => {
+      userRepo.findOne.mockResolvedValue(alice);
+      const pair = makeOverlappingPair(EventStatus.TODO, EventStatus.IN_PROGRESS);
+      eventRepo.find.mockResolvedValueOnce(pair).mockResolvedValueOnce(pair);
+      eventRepo.save.mockImplementation((events) => Promise.resolve(events));
+
+      const result = await service.mergeAll('alice');
+      expect(result[0].status).toBe(EventStatus.IN_PROGRESS);
+    });
+
+    it('picks COMPLETED only if both events are COMPLETED', async () => {
+      userRepo.findOne.mockResolvedValue(alice);
+      const pair = makeOverlappingPair(EventStatus.COMPLETED, EventStatus.COMPLETED);
+      eventRepo.find.mockResolvedValueOnce(pair).mockResolvedValueOnce(pair);
+      eventRepo.save.mockImplementation((events) => Promise.resolve(events));
+
+      const result = await service.mergeAll('alice');
+      expect(result[0].status).toBe(EventStatus.COMPLETED);
+    });
+
+    it('falls back to TODO if statuses are mixed with no IN_PROGRESS', async () => {
+      userRepo.findOne.mockResolvedValue(alice);
+      const pair = makeOverlappingPair(EventStatus.TODO, EventStatus.COMPLETED);
+      eventRepo.find.mockResolvedValueOnce(pair).mockResolvedValueOnce(pair);
+      eventRepo.save.mockImplementation((events) => Promise.resolve(events));
+
+      const result = await service.mergeAll('alice');
+      expect(result[0].status).toBe(EventStatus.TODO);
     });
   });
 });
